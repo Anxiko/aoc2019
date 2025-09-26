@@ -23,9 +23,9 @@ impl Display for DayPart {
 }
 
 impl DayPart {
-	pub(crate) fn is_part2(&self) -> bool {
-		*self == DayPart::Part2
-	}
+    pub(crate) fn is_part2(&self) -> bool {
+        *self == DayPart::Part2
+    }
 }
 
 pub trait Day {

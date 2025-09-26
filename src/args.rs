@@ -6,5 +6,5 @@ pub struct Args {
     pub day: u32,
     pub day_part: DayPart,
     #[arg(short, long)]
-    example: bool,
+    pub example: bool,
 }
