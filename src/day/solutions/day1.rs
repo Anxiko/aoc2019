@@ -1,12 +1,12 @@
-use crate::day::{DaySolver, DayPart};
+use crate::day::{DayPart, DaySolver};
 
 pub struct Day1 {}
 
 impl Day1 {
-	pub(crate) fn new() -> Self {
-		Self{}
-	}
-	
+    pub(crate) fn new() -> Self {
+        Self {}
+    }
+
     fn parse_input(input: &[&str]) -> Result<Vec<u32>, anyhow::Error> {
         let numbers = input
             .iter()
@@ -33,10 +33,10 @@ impl Day1 {
 
 impl DaySolver for Day1 {
     fn solve_part(
-	    &self,
-	    part: DayPart,
-	    _example: bool,
-	    input: &[&str],
+        &self,
+        part: DayPart,
+        _example: bool,
+        input: &[&str],
     ) -> Result<Box<dyn ToString>, anyhow::Error> {
         let total_fuel: u32 = Self::parse_input(input)?
             .into_iter()

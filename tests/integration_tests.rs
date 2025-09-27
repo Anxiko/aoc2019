@@ -24,12 +24,12 @@ fn solutions() -> anyhow::Result<()> {
 
             let Some(scenario) = expected_output.get_scenario(example) else {
                 eprintln!("Skipping scenario for day {day} example={example}");
-	            continue
+                continue;
             };
 
             for part in DayPart::values() {
                 let Some(value) = scenario.get_part(part) else {
-	                eprintln!("Skipping part {part} for day {day} example={example}");
+                    eprintln!("Skipping part {part} for day {day} example={example}");
                     continue;
                 };
 

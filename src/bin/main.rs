@@ -10,7 +10,7 @@ fn main() -> Result<(), anyhow::Error> {
     let path = solutions::file_path(args.day, args.example);
 
     let lines = parse_file(&path)?;
-	let input = lines.iter().map(String::as_str).collect_vec();
+    let input = lines.iter().map(String::as_str).collect_vec();
 
     let solution = day_solver.solve_part(args.day_part, args.example, &input)?;
 
