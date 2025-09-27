@@ -1,40 +1,18 @@
 use aoc2019::args::Args;
-use aoc2019::day::Day;
-use aoc2019::day1::Day1;
-use aoc2019::day2::Day2;
+use aoc2019::day::solutions;
 use aoc2019::parsers::parse_file;
 use clap::Parser;
-use std::path::{Path, PathBuf};
-
-fn get_day(day: u32) -> Result<Box<dyn Day>, anyhow::Error> {
-    match day {
-        invalid if invalid == 0 || invalid > 50 => anyhow::bail!("Invalid day {invalid}"),
-        1 => Ok(Box::new(Day1 {})),
-        2 => Ok(Box::new(Day2 {})),
-        _unimplemented => anyhow::bail!("Unimplemented day: {day}"),
-    }
-}
-
-fn file_path(day: u32, example: bool) -> Box<Path> {
-    let mut path = PathBuf::from("data/days/");
-    path.push(format!("day{day}/"));
-    if example {
-        path.push("example.txt")
-    } else {
-        path.push("real.txt");
-    }
-
-    path.into_boxed_path()
-}
+use itertools::Itertools;
 
 fn main() -> Result<(), anyhow::Error> {
     let args = Args::parse();
-    let day_solver = get_day(args.day)?;
-    let path = file_path(args.day, args.example);
+    let day_solver = solutions::get_day(args.day)?;
+    let path = solutions::file_path(args.day, args.example);
 
     let lines = parse_file(&path)?;
+	let input = lines.iter().map(String::as_str).collect_vec();
 
-    let solution = day_solver.solve_part(args.day_part, lines)?;
+    let solution = day_solver.solve_part(args.day_part, args.example, &input)?;
 
     println!(
         "Day {} part {}: {}",

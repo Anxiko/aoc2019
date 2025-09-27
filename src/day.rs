@@ -1,6 +1,8 @@
 use clap::ValueEnum;
 use std::fmt::Display;
 
+pub mod solutions;
+
 #[derive(Debug, Copy, Clone, Eq, PartialEq, ValueEnum)]
 pub enum DayPart {
     Part1,
@@ -26,12 +28,19 @@ impl DayPart {
     pub(crate) fn is_part2(&self) -> bool {
         *self == DayPart::Part2
     }
+
+    pub fn values() -> impl Iterator<Item = DayPart> {
+        [DayPart::Part1, DayPart::Part2, DayPart::Part1]
+            .iter()
+            .copied()
+    }
 }
 
-pub trait Day {
+pub trait DaySolver {
     fn solve_part(
         &self,
         part: DayPart,
-        input: Vec<String>,
+        example: bool,
+        input: &[&str],
     ) -> Result<Box<dyn ToString>, anyhow::Error>;
 }
