@@ -18,14 +18,14 @@ fn solutions() -> anyhow::Result<()> {
         };
 
         for example in [false, true] {
-            let path = solutions::file_path(day, example);
-            let input = parse_file(&path)?;
-            let input = input.iter().map(String::as_str).collect_vec();
-
             let Some(scenario) = expected_output.get_scenario(example) else {
                 eprintln!("Skipping scenario for day {day} example={example}");
                 continue;
             };
+
+            let path = solutions::file_path(day, example);
+            let input = parse_file(&path)?;
+            let input = input.iter().map(String::as_str).collect_vec();
 
             for part in DayPart::values() {
                 let Some(value) = scenario.get_part(part) else {
