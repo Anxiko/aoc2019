@@ -1,28 +1,308 @@
+use crate::types::IntCell;
 use anyhow::{Context, anyhow};
+use itertools::Itertools;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
+use std::collections::VecDeque;
+use std::fmt::Display;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, TryFromPrimitive, IntoPrimitive)]
 #[repr(u32)]
 enum OpCode {
     Add = 1,
     Mul = 2,
+    Input = 3,
+    Output = 4,
+    JumpIfTrue = 5,
+    JumpIfFalse = 6,
+    LessThan = 7,
+    Equals = 8,
     Halt = 99,
+}
+
+impl OpCode {
+    fn number_arguments(&self) -> usize {
+        match self {
+            Self::Add | Self::Mul => 3,
+            Self::Input | Self::Output => 1,
+            Self::JumpIfTrue | Self::JumpIfFalse => 2,
+            Self::LessThan | Self::Equals => 3,
+            Self::Halt => 0,
+        }
+    }
+}
+
+impl Display for OpCode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let str = match self {
+            Self::Add => "add",
+            Self::Mul => "mul",
+            Self::Input => "in",
+            Self::Output => "out",
+            Self::JumpIfTrue => "jumpt",
+            Self::JumpIfFalse => "jumpf",
+            Self::LessThan => "lt",
+            Self::Equals => "eq",
+            Self::Halt => "halt",
+        };
+
+        write!(f, "{}", str)
+    }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+struct Instruction {
+    code: OpCode,
+    direct_flags: [bool; 3],
+}
+
+impl Instruction {
+    fn extract_parameter_flag(value: IntCell, idx: u32) -> bool {
+        (value / (10_i32.pow(idx))) % 10 == 1
+    }
+}
+
+impl TryFrom<IntCell> for Instruction {
+    type Error = anyhow::Error;
+
+    fn try_from(value: IntCell) -> Result<Self, Self::Error> {
+        let code = OpCode::try_from((value % 100) as u32)?;
+        let parameter_flags = value / 100;
+        let direct_flags = [
+            Self::extract_parameter_flag(parameter_flags, 0),
+            Self::extract_parameter_flag(parameter_flags, 1),
+            Self::extract_parameter_flag(parameter_flags, 2),
+        ];
+
+        Ok(Self { code, direct_flags })
+    }
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+enum Operand {
+    Direct(IntCell),
+    Indirect(IntCell),
+}
+
+impl Operand {
+    fn new(value: IntCell, direct: bool) -> Self {
+        if direct {
+            Self::Direct(value)
+        } else {
+            Self::Indirect(value)
+        }
+    }
+
+    fn argument(&self) -> IntCell {
+        match *self {
+            Self::Direct(value) => value,
+            Self::Indirect(value) => value,
+        }
+    }
+
+    fn is_indirect(&self) -> bool {
+        matches!(self, Self::Indirect(_))
+    }
+
+    fn read(&self, machine: &mut IntMachine) -> anyhow::Result<IntCell> {
+        match self {
+            Self::Direct(value) => Ok(*value),
+            Self::Indirect(ptr) => {
+                let address = usize::try_from(*ptr)
+                    .map_err(|_| anyhow::anyhow!("Can't convert ptr={ptr} to address"))?;
+                machine.read(address)
+            }
+        }
+    }
+
+    fn as_address(&self) -> anyhow::Result<IntCell> {
+        match *self {
+            Self::Direct(_) => Err(anyhow::anyhow!("Can't treat a direct operand as pointer")),
+            Self::Indirect(value) => Ok(value),
+        }
+    }
+
+    fn write(&self, machine: &mut IntMachine, value: IntCell) -> anyhow::Result<()> {
+        let address = self.as_address()?;
+        let address = usize::try_from(address)?;
+
+        machine.write(address, value)
+    }
+}
+
+impl Display for Operand {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.is_indirect() {
+            write!(f, "*")?;
+        }
+
+        write!(f, "{}", self.argument())
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct ExecutableInstruction {
+    instruction: Instruction,
+    operands: Vec<Operand>,
+}
+
+impl ExecutableInstruction {
+    fn new(instruction: Instruction, operands: Vec<Operand>) -> Self {
+        Self {
+            instruction,
+            operands,
+        }
+    }
+
+    fn decode(machine: &mut IntMachine) -> anyhow::Result<Self> {
+        let instruction = machine
+            .read_pc()
+            .with_context(|| "Failed to read instruction")?;
+        let instruction =
+            Instruction::try_from(instruction).with_context(|| "Failed to parse instruction")?;
+
+        let n_arguments = instruction.code.number_arguments();
+        let arguments: Vec<_> = std::iter::repeat_with(|| machine.read_pc())
+            .take(n_arguments)
+            .collect::<Result<_, _>>()
+            .with_context(|| "Failed to parse arguments")?;
+
+        if arguments.len() != n_arguments {
+            anyhow::bail!(
+                "Expected {} arguments, got {}",
+                n_arguments,
+                arguments.len()
+            );
+        }
+
+        let operands = arguments
+            .into_iter()
+            .zip(instruction.direct_flags.iter())
+            .map(|(argument, &direct_flag)| Operand::new(argument, direct_flag))
+            .collect_vec();
+
+        Ok(Self::new(instruction, operands))
+    }
+
+    fn execute_calculation(
+        &self,
+        machine: &mut IntMachine,
+        formula: Box<dyn FnOnce(IntCell, IntCell) -> IntCell>,
+    ) -> anyhow::Result<()> {
+        let [lhs, rhs, dst_ptr]: [Operand; 3] =
+            self.operands
+                .as_slice()
+                .try_into()
+                .map_err(|invalid_operands| {
+                    anyhow::anyhow!(
+                        "Unexpected number of arguments for operation: {invalid_operands:?}"
+                    )
+                })?;
+
+        let left_value = lhs.read(machine)?;
+        let right_value = rhs.read(machine)?;
+
+        let result = formula(left_value, right_value);
+
+        dst_ptr.write(machine, result)?;
+
+        Ok(())
+    }
+
+    fn execute_jump(
+        &self,
+        machine: &mut IntMachine,
+        predicate: Box<dyn FnOnce(IntCell) -> bool>,
+    ) -> anyhow::Result<()> {
+        let [test_operand, address_ptr]: [Operand; 2] = self.operands.as_slice().try_into()?;
+        let test_value = test_operand.read(machine)?;
+
+        if predicate(test_value) {
+            let address = address_ptr.read(machine)?;
+            machine.write_pc(address)?;
+        }
+        Ok(())
+    }
+
+    fn execute_comparison(
+        &self,
+        machine: &mut IntMachine,
+        comparison: Box<dyn FnOnce(IntCell, IntCell) -> bool>,
+    ) -> anyhow::Result<()> {
+        let [lhs, rhs, dst_ptr]: [Operand; 3] = self.operands.as_slice().try_into()?;
+
+        let left_value = lhs.read(machine)?;
+        let right_value = rhs.read(machine)?;
+
+        let result: IntCell = comparison(left_value, right_value).into();
+        dst_ptr.write(machine, result)?;
+
+        Ok(())
+    }
+
+    fn execute(&self, machine: &mut IntMachine) -> Result<(), anyhow::Error> {
+        match self.instruction.code {
+            OpCode::Add => self.execute_calculation(machine, Box::new(|x, y| x + y)),
+            OpCode::Mul => self.execute_calculation(machine, Box::new(|x, y| x * y)),
+            OpCode::Input => {
+                let [dst_ptr]: [Operand; 1] = self.operands.as_slice().try_into()?;
+
+                let value = machine.read_input()?;
+
+                dst_ptr.write(machine, value)?;
+
+                Ok(())
+            }
+            OpCode::Output => {
+                let [src]: [Operand; 1] = self.operands.as_slice().try_into()?;
+                let value = src.read(machine)?;
+
+                machine.write_output(value);
+                Ok(())
+            }
+            OpCode::JumpIfTrue => self.execute_jump(machine, Box::new(|value| value != 0)),
+            OpCode::JumpIfFalse => self.execute_jump(machine, Box::new(|value| value == 0)),
+            OpCode::LessThan => self.execute_comparison(machine, Box::new(|x, y| x < y)),
+            OpCode::Equals => self.execute_comparison(machine, Box::new(|x, y| x == y)),
+            OpCode::Halt => {
+                machine.halt();
+                Ok(())
+            }
+        }
+    }
+}
+
+impl Display for ExecutableInstruction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.instruction.code)?;
+        let operands = self.operands.iter().map(ToString::to_string).join(" ");
+        write!(f, " {operands}")?;
+
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct IntMachine {
-    mem: Vec<u32>,
+    mem: Vec<IntCell>,
     pc: usize,
     halted: bool,
+    input: VecDeque<IntCell>,
+    output: Vec<IntCell>,
 }
 
 impl IntMachine {
-    pub(crate) fn new(mem: Vec<u32>) -> Self {
+    pub(crate) fn new(mem: Vec<IntCell>) -> Self {
         Self {
             mem,
             pc: 0,
             halted: false,
+            input: Default::default(),
+            output: Default::default(),
         }
+    }
+
+    pub(crate) fn with_input(&mut self, input: VecDeque<IntCell>) {
+        self.input = input;
     }
 
     pub(crate) fn is_halted(&self) -> bool {
@@ -34,14 +314,12 @@ impl IntMachine {
             anyhow::bail!("Attempted to run a halted machine")
         }
 
-        let opcode: OpCode = self.read_pc().and_then(|value| {
-            OpCode::try_from(value).map_err(|_| anyhow!("Unknown opcode {}", value))
-        })?;
+        let executable_instruction = ExecutableInstruction::decode(self)?;
 
-        self.execute(opcode)
+        executable_instruction.execute(self)
     }
 
-    pub(crate) fn run(&mut self) -> Result<u32, anyhow::Error> {
+    pub(crate) fn run(&mut self) -> Result<IntCell, anyhow::Error> {
         while !self.halted {
             self.step()?;
         }
@@ -49,14 +327,14 @@ impl IntMachine {
         self.read(0)
     }
 
-    pub(crate) fn read(&mut self, address: usize) -> Result<u32, anyhow::Error> {
+    pub(crate) fn read(&self, address: usize) -> Result<IntCell, anyhow::Error> {
         self.mem
             .get(address)
             .ok_or_else(|| anyhow!("Failed to read at address={}, out of bounds", address))
             .copied()
     }
 
-    fn read_pc(&mut self) -> Result<u32, anyhow::Error> {
+    fn read_pc(&mut self) -> Result<IntCell, anyhow::Error> {
         let result = self.read(self.pc).with_context(|| "Failed to read from PC");
 
         if result.is_ok() {
@@ -66,44 +344,37 @@ impl IntMachine {
         result
     }
 
-    pub(crate) fn write(&mut self, index: usize, value: u32) -> Result<(), anyhow::Error> {
+    pub(crate) fn write(&mut self, address: usize, value: IntCell) -> Result<(), anyhow::Error> {
         let mem_ref = self
             .mem
-            .get_mut(index)
+            .get_mut(address)
             .ok_or_else(|| anyhow!("Failed to write at"))?;
         *mem_ref = value;
         Ok(())
     }
 
-    fn execute_calculation(
-        &mut self,
-        formula: Box<dyn FnOnce(u32, u32) -> u32>,
-    ) -> Result<(), anyhow::Error> {
-        let left_ptr = self.read_pc()?;
-        let left_value = self.read(left_ptr as usize)?;
+    fn read_input(&mut self) -> anyhow::Result<IntCell> {
+        self.input
+            .pop_front()
+            .ok_or_else(|| anyhow!("Failed to read input"))
+    }
 
-        let right_ptr = self.read_pc()?;
-        let right_value = self.read(right_ptr as usize)?;
-
-        let dst_ptr = self.read_pc()?;
-
-        let result = formula(left_value, right_value);
-
-        self.write(dst_ptr as usize, result)
+    fn write_output(&mut self, value: IntCell) {
+        self.output.push(value);
     }
 
     fn halt(&mut self) {
         self.halted = true;
     }
 
-    fn execute(&mut self, op: OpCode) -> Result<(), anyhow::Error> {
-        match op {
-            OpCode::Add => self.execute_calculation(Box::new(|x, y| x + y)),
-            OpCode::Mul => self.execute_calculation(Box::new(|x, y| x * y)),
-            OpCode::Halt => {
-                self.halt();
-                Ok(())
-            }
-        }
+    pub(crate) fn get_output(self) -> Vec<IntCell> {
+        self.output.clone()
+    }
+
+    pub fn write_pc(&mut self, value: IntCell) -> anyhow::Result<()> {
+        self.pc = value
+            .try_into()
+            .with_context(|| format!("Invalid value {value} given for PC"))?;
+        Ok(())
     }
 }

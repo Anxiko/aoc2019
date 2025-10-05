@@ -3,12 +3,14 @@ use crate::day::solutions::day1::Day1;
 use crate::day::solutions::day2::Day2;
 use crate::day::solutions::day3::Day3;
 use crate::day::solutions::day4::Day4;
+use crate::day::solutions::day5::Day5;
 use std::path::{Path, PathBuf};
 
 mod day1;
 mod day2;
 mod day3;
 mod day4;
+mod day5;
 
 pub fn get_day(day: u32) -> Result<Box<dyn DaySolver>, anyhow::Error> {
     match day {
@@ -17,6 +19,7 @@ pub fn get_day(day: u32) -> Result<Box<dyn DaySolver>, anyhow::Error> {
         2 => Ok(Box::new(Day2::new(19690720))),
         3 => Ok(Box::new(Day3::new())),
         4 => Ok(Box::new(Day4::new())),
+        5 => Ok(Box::new(Day5::new())),
         _unimplemented => anyhow::bail!("Unimplemented day: {day}"),
     }
 }

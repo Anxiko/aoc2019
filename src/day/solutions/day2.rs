@@ -1,21 +1,22 @@
 use crate::day::{DayPart, DaySolver};
 use crate::intcode::IntMachine;
+use crate::types::IntCell;
 use anyhow;
 
 pub struct Day2 {
-    target_output: u32,
+    target_output: IntCell,
 }
 
-type Memory = Vec<u32>;
+type Memory = Vec<IntCell>;
 
 impl Day2 {
-    pub(crate) fn new(target_output: u32) -> Self {
+    pub(crate) fn new(target_output: IntCell) -> Self {
         Self { target_output }
     }
 
     fn parse_line(line: &str) -> Result<Memory, anyhow::Error> {
         line.split(',')
-            .map(|value| value.parse::<u32>().map_err(|e| e.into()))
+            .map(|value| value.parse::<IntCell>().map_err(|e| e.into()))
             .collect()
     }
 
@@ -29,10 +30,10 @@ impl Day2 {
 
     fn solve_for_output(
         machine: IntMachine,
-        expected_output: u32,
-    ) -> Result<(u32, u32), anyhow::Error> {
-        for noun in 0..=99u32 {
-            for verb in 0..=99u32 {
+        expected_output: IntCell,
+    ) -> Result<(IntCell, IntCell), anyhow::Error> {
+        for noun in 0..=99i32 {
+            for verb in 0..=99i32 {
                 let mut altered_machine = machine.clone();
                 altered_machine.write(1, noun)?;
                 altered_machine.write(2, verb)?;
