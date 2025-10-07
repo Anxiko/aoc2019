@@ -327,6 +327,23 @@ impl IntMachine {
         self.read(0)
     }
 
+    pub(crate) fn run_until_input(&mut self) -> Result<(), anyhow::Error> {
+        while !self.halted && !self.will_run_out_of_input()? {
+            self.step()?;
+        }
+
+        Ok(())
+    }
+
+    fn peek_instruction(&self) -> anyhow::Result<Instruction> {
+        let instruction = self.read(self.pc)?;
+        instruction.try_into()
+    }
+
+    fn will_run_out_of_input(&self) -> anyhow::Result<bool> {
+        Ok(self.peek_instruction()?.code == OpCode::Input && self.input.is_empty())
+    }
+
     pub(crate) fn read(&self, address: usize) -> Result<IntCell, anyhow::Error> {
         self.mem
             .get(address)
@@ -359,6 +376,10 @@ impl IntMachine {
             .ok_or_else(|| anyhow!("Failed to read input"))
     }
 
+    pub(crate) fn add_input(&mut self, value: IntCell) {
+        self.input.push_back(value);
+    }
+
     fn write_output(&mut self, value: IntCell) {
         self.output.push(value);
     }
@@ -377,4 +398,15 @@ impl IntMachine {
             .with_context(|| format!("Invalid value {value} given for PC"))?;
         Ok(())
     }
+
+	pub(crate) fn pop_output(&mut self) -> anyhow::Result<IntCell> {
+		match self.output.clone().as_slice() {
+			[value, rest @ ..] => {
+				let new_output = rest.to_vec();
+				self.output = new_output;
+				Ok(*value)
+			}
+			[] => Err(anyhow::anyhow!("No output to pop")),
+		}
+	}
 }
