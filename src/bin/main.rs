@@ -15,7 +15,7 @@ fn main() -> Result<(), anyhow::Error> {
     let solution = day_solver.solve_part(args.day_part, args.example, &input)?;
 
     println!(
-        "Day {} part {}: {}",
+        "Day {} part {}:\n{}",
         args.day,
         args.day_part,
         solution.to_string()

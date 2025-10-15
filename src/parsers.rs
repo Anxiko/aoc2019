@@ -12,6 +12,14 @@ pub fn parse_file(file: &Path) -> Result<Vec<String>, anyhow::Error> {
     Ok(lines)
 }
 
+pub fn single_input_line<'a>(lines: &[&'a str]) -> Result<&'a str, anyhow::Error> {
+    match lines {
+        [] => Err(anyhow!("No lines in input")),
+        [line] => Ok(line),
+        lines => Err(anyhow!("Too many lines: {lines:?}")),
+    }
+}
+
 pub fn parse_intmachine_input(lines: &[&str]) -> Result<Vec<IntCell>, anyhow::Error> {
     match lines {
         [] => Err(anyhow::anyhow!("No input lines")),
