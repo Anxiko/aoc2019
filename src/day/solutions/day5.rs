@@ -45,7 +45,7 @@ impl DaySolver for Day5 {
             DayPart::Part2 => {
                 machine.with_input(vec![5].into());
 
-	            machine.run()?;
+                machine.run()?;
 
                 let output = machine.get_output();
 

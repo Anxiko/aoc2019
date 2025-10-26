@@ -16,6 +16,7 @@ enum OpCode {
     JumpIfFalse = 6,
     LessThan = 7,
     Equals = 8,
+    RelativeBaseOffset = 9,
     Halt = 99,
 }
 
@@ -26,6 +27,7 @@ impl OpCode {
             Self::Input | Self::Output => 1,
             Self::JumpIfTrue | Self::JumpIfFalse => 2,
             Self::LessThan | Self::Equals => 3,
+            Self::RelativeBaseOffset => 1,
             Self::Halt => 0,
         }
     }
@@ -42,6 +44,7 @@ impl Display for OpCode {
             Self::JumpIfFalse => "jumpf",
             Self::LessThan => "lt",
             Self::Equals => "eq",
+            Self::RelativeBaseOffset => "rel",
             Self::Halt => "halt",
         };
 
@@ -49,15 +52,25 @@ impl Display for OpCode {
     }
 }
 
+#[derive(Debug, Copy, Clone, Eq, PartialEq, TryFromPrimitive, IntoPrimitive)]
+#[repr(u8)]
+enum OperandMode {
+    Indirect = 0,
+    Direct = 1,
+    Relative = 2,
+}
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 struct Instruction {
     code: OpCode,
-    direct_flags: [bool; 3],
+    operand_modes: [OperandMode; 3],
 }
 
 impl Instruction {
-    fn extract_parameter_flag(value: IntCell, idx: u32) -> bool {
-        (value / (10_i32.pow(idx))) % 10 == 1
+    fn extract_operand_mode(value: IntCell, idx: u32) -> anyhow::Result<OperandMode> {
+        let raw = (value / ((10 as IntCell).pow(idx))) % 10;
+        let operand = OperandMode::try_from(raw as u8)?;
+        Ok(operand)
     }
 }
 
@@ -67,13 +80,16 @@ impl TryFrom<IntCell> for Instruction {
     fn try_from(value: IntCell) -> Result<Self, Self::Error> {
         let code = OpCode::try_from((value % 100) as u32)?;
         let parameter_flags = value / 100;
-        let direct_flags = [
-            Self::extract_parameter_flag(parameter_flags, 0),
-            Self::extract_parameter_flag(parameter_flags, 1),
-            Self::extract_parameter_flag(parameter_flags, 2),
+        let operand_modes = [
+            Self::extract_operand_mode(parameter_flags, 0)?,
+            Self::extract_operand_mode(parameter_flags, 1)?,
+            Self::extract_operand_mode(parameter_flags, 2)?,
         ];
 
-        Ok(Self { code, direct_flags })
+        Ok(Self {
+            code,
+            operand_modes,
+        })
     }
 }
 
@@ -81,14 +97,15 @@ impl TryFrom<IntCell> for Instruction {
 enum Operand {
     Direct(IntCell),
     Indirect(IntCell),
+    Relative(IntCell),
 }
 
 impl Operand {
-    fn new(value: IntCell, direct: bool) -> Self {
-        if direct {
-            Self::Direct(value)
-        } else {
-            Self::Indirect(value)
+    fn new(value: IntCell, operand_mode: OperandMode) -> Self {
+        match operand_mode {
+            OperandMode::Indirect => Self::Indirect(value),
+            OperandMode::Direct => Self::Direct(value),
+            OperandMode::Relative => Self::Relative(value),
         }
     }
 
@@ -96,11 +113,8 @@ impl Operand {
         match *self {
             Self::Direct(value) => value,
             Self::Indirect(value) => value,
+            Self::Relative(value) => value,
         }
-    }
-
-    fn is_indirect(&self) -> bool {
-        matches!(self, Self::Indirect(_))
     }
 
     fn read(&self, machine: &mut IntMachine) -> anyhow::Result<IntCell> {
@@ -111,18 +125,25 @@ impl Operand {
                     .map_err(|_| anyhow::anyhow!("Can't convert ptr={ptr} to address"))?;
                 machine.read(address)
             }
+            Self::Relative(value) => {
+                let address = machine.relative_base + value;
+                let address = usize::try_from(address)
+                    .map_err(|_| anyhow::anyhow!("Can't convert address={address}"))?;
+                machine.read(address)
+            }
         }
     }
 
-    fn as_address(&self) -> anyhow::Result<IntCell> {
+    fn as_address(&self, machine: &IntMachine) -> anyhow::Result<IntCell> {
         match *self {
             Self::Direct(_) => Err(anyhow::anyhow!("Can't treat a direct operand as pointer")),
             Self::Indirect(value) => Ok(value),
+            Self::Relative(value) => Ok(value + machine.relative_base),
         }
     }
 
     fn write(&self, machine: &mut IntMachine, value: IntCell) -> anyhow::Result<()> {
-        let address = self.as_address()?;
+        let address = self.as_address(machine)?;
         let address = usize::try_from(address)?;
 
         machine.write(address, value)
@@ -131,8 +152,14 @@ impl Operand {
 
 impl Display for Operand {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.is_indirect() {
-            write!(f, "*")?;
+        match self {
+            Operand::Indirect(_) => {
+                write!(f, "*")?;
+            }
+            Operand::Relative(_) => {
+                write!(f, "+")?;
+            }
+            Operand::Direct(_) => {}
         }
 
         write!(f, "{}", self.argument())
@@ -176,7 +203,7 @@ impl ExecutableInstruction {
 
         let operands = arguments
             .into_iter()
-            .zip(instruction.direct_flags.iter())
+            .zip(instruction.operand_modes.iter())
             .map(|(argument, &direct_flag)| Operand::new(argument, direct_flag))
             .collect_vec();
 
@@ -263,6 +290,14 @@ impl ExecutableInstruction {
             OpCode::JumpIfFalse => self.execute_jump(machine, Box::new(|value| value == 0)),
             OpCode::LessThan => self.execute_comparison(machine, Box::new(|x, y| x < y)),
             OpCode::Equals => self.execute_comparison(machine, Box::new(|x, y| x == y)),
+            OpCode::RelativeBaseOffset => {
+                let [delta]: [Operand; 1] = self.operands.as_slice().try_into()?;
+                let delta = delta.read(machine)?;
+
+                machine.delta_relative_base(delta);
+
+                Ok(())
+            }
             OpCode::Halt => {
                 machine.halt();
                 Ok(())
@@ -285,16 +320,24 @@ impl Display for ExecutableInstruction {
 pub(crate) struct IntMachine {
     mem: Vec<IntCell>,
     pc: usize,
+    relative_base: IntCell,
     halted: bool,
     input: VecDeque<IntCell>,
     output: Vec<IntCell>,
 }
 
+const MIN_MEM_SIZE: usize = 10 * 1024;
+
 impl IntMachine {
-    pub(crate) fn new(mem: Vec<IntCell>) -> Self {
+    pub(crate) fn new(mut mem: Vec<IntCell>) -> Self {
+        if mem.len() < MIN_MEM_SIZE {
+            mem.resize(MIN_MEM_SIZE, 0);
+        }
+
         Self {
             mem,
             pc: 0,
+            relative_base: 0,
             halted: false,
             input: Default::default(),
             output: Default::default(),
@@ -399,14 +442,18 @@ impl IntMachine {
         Ok(())
     }
 
-	pub(crate) fn pop_output(&mut self) -> anyhow::Result<IntCell> {
-		match self.output.clone().as_slice() {
-			[value, rest @ ..] => {
-				let new_output = rest.to_vec();
-				self.output = new_output;
-				Ok(*value)
-			}
-			[] => Err(anyhow::anyhow!("No output to pop")),
-		}
-	}
+    pub(crate) fn pop_output(&mut self) -> anyhow::Result<IntCell> {
+        match self.output.clone().as_slice() {
+            [value, rest @ ..] => {
+                let new_output = rest.to_vec();
+                self.output = new_output;
+                Ok(*value)
+            }
+            [] => Err(anyhow::anyhow!("No output to pop")),
+        }
+    }
+
+    pub(crate) fn delta_relative_base(&mut self, delta: IntCell) {
+        self.relative_base += delta;
+    }
 }

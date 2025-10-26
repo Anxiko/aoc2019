@@ -1,1 +1,1 @@
-pub type IntCell = i32;
+pub type IntCell = i64;

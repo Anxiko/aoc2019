@@ -32,8 +32,8 @@ impl Day2 {
         machine: IntMachine,
         expected_output: IntCell,
     ) -> Result<(IntCell, IntCell), anyhow::Error> {
-        for noun in 0..=99i32 {
-            for verb in 0..=99i32 {
+        for noun in 0..=(99 as IntCell) {
+            for verb in 0..=(99 as IntCell) {
                 let mut altered_machine = machine.clone();
                 altered_machine.write(1, noun)?;
                 altered_machine.write(2, verb)?;
