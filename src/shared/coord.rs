@@ -1,20 +1,27 @@
 use std::fmt::{Display, Formatter};
-use std::ops::{Add, AddAssign};
+use std::ops::{Add, AddAssign, Sub, SubAssign};
 use strum_macros::EnumString;
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Hash)]
 pub struct Coord {
-    x: i32,
-    y: i32,
+    pub(crate) x: i32,
+    pub(crate) y: i32,
 }
 
 impl Coord {
-    fn new(x: i32, y: i32) -> Coord {
+    pub(crate) fn new(x: i32, y: i32) -> Coord {
         Coord { x, y }
     }
 
     pub(crate) fn manhattan(&self) -> u32 {
         self.x.unsigned_abs() + self.y.unsigned_abs()
+    }
+
+    pub(crate) fn module(&self) -> f64 {
+        let x = self.x as f64;
+        let y = self.y as f64;
+
+        (x * x + y * y).sqrt()
     }
 }
 
@@ -34,7 +41,21 @@ impl Add<Coord> for Coord {
 
 impl AddAssign for Coord {
     fn add_assign(&mut self, rhs: Self) {
-        *self = *self + rhs
+        *self = *self + rhs;
+    }
+}
+
+impl Sub<Coord> for Coord {
+    type Output = Coord;
+
+    fn sub(self, rhs: Coord) -> Self::Output {
+        Self::new(self.x - rhs.x, self.y - rhs.y)
+    }
+}
+
+impl SubAssign for Coord {
+    fn sub_assign(&mut self, rhs: Self) {
+        *self = *self - rhs;
     }
 }
 
