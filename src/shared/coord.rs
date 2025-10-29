@@ -77,6 +77,37 @@ pub enum Direction {
     Left,
 }
 
+const CLOCKWISE: [Direction; 4] = [
+    Direction::Up,
+    Direction::Right,
+    Direction::Down,
+    Direction::Left,
+];
+
+impl Direction {
+    pub(crate) fn turn_right(&self) -> Self {
+        let idx = CLOCKWISE
+            .iter()
+            .position(|d| d == self)
+            .expect("Find direction position");
+
+        let idx = (idx + 1) % CLOCKWISE.len();
+
+        CLOCKWISE[idx]
+    }
+
+    pub(crate) fn turn_left(&self) -> Self {
+        let idx = CLOCKWISE
+            .iter()
+            .position(|d| d == self)
+            .expect("Find direction position");
+
+        let idx = (CLOCKWISE.len() + idx - 1) % CLOCKWISE.len();
+
+        CLOCKWISE[idx]
+    }
+}
+
 impl From<Direction> for Coord {
     fn from(value: Direction) -> Self {
         match value {

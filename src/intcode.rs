@@ -378,6 +378,18 @@ impl IntMachine {
         Ok(())
     }
 
+    pub(crate) fn run_until_output(&mut self) -> Result<IntCell, anyhow::Error> {
+        while !self.halted {
+            if let Ok(output) = self.pop_output() {
+                return Ok(output);
+            }
+
+            self.step()?;
+        }
+
+        Err(anyhow::anyhow!("Machine halted before producing output"))
+    }
+
     fn peek_instruction(&self) -> anyhow::Result<Instruction> {
         let instruction = self.read(self.pc)?;
         instruction.try_into()
