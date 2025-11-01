@@ -91,6 +91,17 @@ impl<T: Clone> Board<T> for Grid<T> {
 
         Ok(())
     }
+
+    fn elements<'a>(&'a self) -> impl Iterator<Item = (Coord, &'a T)>
+    where
+        T: 'a,
+    {
+        self.rows.iter().enumerate().flat_map(|(y, row)| {
+            row.iter()
+                .enumerate()
+                .map(move |(x, element)| (Coord::new(x as i32, y as i32), element))
+        })
+    }
 }
 
 impl<T: Display> Display for Grid<T> {

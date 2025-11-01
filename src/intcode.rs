@@ -443,9 +443,13 @@ impl IntMachine {
         self.halted = true;
     }
 
-    pub(crate) fn get_output(self) -> Vec<IntCell> {
+    pub(crate) fn get_output(&self) -> Vec<IntCell> {
         self.output.clone()
     }
+	
+	pub(crate) fn clear_output(&mut self) {
+		self.output = Vec::new();
+	}
 
     pub fn write_pc(&mut self, value: IntCell) -> anyhow::Result<()> {
         self.pc = value

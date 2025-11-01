@@ -12,4 +12,8 @@ pub(crate) trait Board<T> {
     fn read(&self, coord: Coord) -> Result<&T, Self::Error>;
 
     fn write(&mut self, coord: Coord, value: T) -> Result<(), Self::Error>;
+
+    fn elements<'a>(&'a self) -> impl Iterator<Item = (Coord, &'a T)>
+    where
+        T: 'a;
 }

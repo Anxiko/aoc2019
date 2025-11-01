@@ -6,7 +6,7 @@ use std::convert::Infallible;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct HashBoard<T> {
-    coord_mapping: HashMap<Coord, T>,
+    pub(crate) coord_mapping: HashMap<Coord, T>,
     default: T,
 }
 
@@ -60,5 +60,14 @@ impl<T> Board<T> for HashBoard<T> {
         self.coord_mapping.insert(coord, value);
 
         Ok(())
+    }
+
+    fn elements<'a>(&'a self) -> impl Iterator<Item = (Coord, &'a T)>
+    where
+        T: 'a,
+    {
+        self.coord_mapping
+            .iter()
+            .map(|(&coord, value)| (coord, value))
     }
 }
