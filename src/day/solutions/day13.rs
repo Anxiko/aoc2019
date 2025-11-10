@@ -95,8 +95,9 @@ impl Day13 {
 
         let ball = board
             .elements()
+	        .into_iter()
             .find_map(|(coord, tile)| {
-                if tile == &Tile::Ball {
+                if tile == Tile::Ball {
                     Some(coord)
                 } else {
                     None
@@ -106,8 +107,9 @@ impl Day13 {
 
         let paddle = board
             .elements()
+	        .into_iter()
             .find_map(|(coord, tile)| {
-                if tile == &Tile::Paddle {
+                if tile == Tile::Paddle {
                     Some(coord)
                 } else {
                     None
@@ -117,7 +119,8 @@ impl Day13 {
 
         let blocks = board
             .elements()
-            .filter(|(_coord, tile)| **tile == Tile::Block)
+	        .into_iter()
+            .filter(|(_coord, tile)| *tile == Tile::Block)
             .count();
 
         Ok(ParsedOutput {

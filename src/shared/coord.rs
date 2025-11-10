@@ -1,8 +1,8 @@
 use std::fmt::{Display, Formatter};
-use std::ops::{Add, AddAssign, Sub, SubAssign};
+use std::ops::{Add, AddAssign, Neg, Sub, SubAssign};
 use strum_macros::EnumString;
 
-#[derive(Copy, Clone, Eq, PartialEq, Debug, Hash)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug, Hash, Ord, PartialOrd)]
 pub struct Coord {
     pub(crate) x: i32,
     pub(crate) y: i32,
@@ -22,6 +22,14 @@ impl Coord {
         let y = self.y as f64;
 
         (x * x + y * y).sqrt()
+    }
+
+    pub(crate) fn cross(&self) -> impl Iterator<Item = Self> {
+        CLOCKWISE
+            .iter()
+            .copied()
+            .map(Self::from)
+            .map(|delta| *self + delta)
     }
 }
 
@@ -56,6 +64,14 @@ impl Sub<Coord> for Coord {
 impl SubAssign for Coord {
     fn sub_assign(&mut self, rhs: Self) {
         *self = *self - rhs;
+    }
+}
+
+impl Neg for Coord {
+    type Output = Coord;
+
+    fn neg(self) -> Self::Output {
+        Self::new(-self.x, -self.y)
     }
 }
 
@@ -115,6 +131,20 @@ impl From<Direction> for Coord {
             Direction::Right => Coord::new(1, 0),
             Direction::Down => Coord::new(0, 1),
             Direction::Left => Coord::new(-1, 0),
+        }
+    }
+}
+
+impl TryFrom<Coord> for Direction {
+    type Error = Coord;
+
+    fn try_from(value: Coord) -> Result<Self, Self::Error> {
+        match value {
+            Coord { x: 0, y: -1 } => Ok(Direction::Up),
+            Coord { x: 1, y: 0 } => Ok(Direction::Right),
+            Coord { x: 0, y: 1 } => Ok(Direction::Down),
+            Coord { x: -1, y: 0 } => Ok(Direction::Left),
+            value => Err(value),
         }
     }
 }

@@ -63,7 +63,7 @@ impl Robot {
     }
 
     fn get_grid(&self) -> Grid<Paint> {
-        self.board.as_grid().expect("Transform board into grid")
+        self.board.as_grid().expect("Transform board into grid").1
     }
 
     fn paint_current(&mut self, paint: Paint) {

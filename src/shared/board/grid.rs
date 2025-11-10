@@ -1,8 +1,9 @@
 use crate::shared::board::Board;
 use crate::shared::coord::Coord;
 use itertools::Itertools;
-use std::fmt::{Display, Formatter};
+use std::fmt::{Debug, Display, Formatter};
 
+#[derive(Debug, PartialEq, Eq)]
 pub(crate) struct Grid<T> {
     rows: Vec<Vec<T>>,
 }
@@ -57,14 +58,30 @@ impl<T: Clone> Grid<T> {
             .map(|row| row.into_iter().map(mapper).collect_vec())
             .collect_vec();
 
-        Grid { rows }
+        Grid::new(rows).expect("Map a grid into another")
+    }
+
+	#[allow(unused)]
+    pub(crate) fn map_tuples<O: Clone, F: Fn((Coord, T)) -> O + Copy>(self, mapper: F) -> Grid<O> {
+        let rows = self
+            .rows
+            .into_iter()
+            .enumerate()
+            .map(|(y, row)| {
+                row.into_iter()
+                    .enumerate()
+                    .map(|(x, element)| (Coord::new(x as i32, y as i32), element))
+	                .map(mapper)
+                    .collect_vec()
+            })
+            .collect_vec();
+
+        Grid::new(rows).expect("Map a grid into another")
     }
 }
 
-impl<T: Clone> Board<T> for Grid<T> {
-    type Error = GridAccessError;
-
-    fn read(&self, coord: Coord) -> Result<&T, Self::Error> {
+impl<T: Clone + Debug> Board<T> for Grid<T> {
+    fn read(&self, coord: Coord) -> Result<&T, anyhow::Error> {
         let (col, row) = Self::coord_to_col_row(coord)?;
 
         let row = self
@@ -76,7 +93,7 @@ impl<T: Clone> Board<T> for Grid<T> {
         Ok(element)
     }
 
-    fn write(&mut self, coord: Coord, value: T) -> Result<(), Self::Error> {
+    fn write(&mut self, coord: Coord, value: T) -> Result<(), anyhow::Error> {
         let (col, row) = Self::coord_to_col_row(coord)?;
 
         let row = self
@@ -92,15 +109,16 @@ impl<T: Clone> Board<T> for Grid<T> {
         Ok(())
     }
 
-    fn elements<'a>(&'a self) -> impl Iterator<Item = (Coord, &'a T)>
-    where
-        T: 'a,
-    {
-        self.rows.iter().enumerate().flat_map(|(y, row)| {
-            row.iter()
-                .enumerate()
-                .map(move |(x, element)| (Coord::new(x as i32, y as i32), element))
-        })
+    fn elements(&self) -> Vec<(Coord, T)> {
+        self.rows
+            .iter()
+            .enumerate()
+            .flat_map(|(y, row)| {
+                row.iter()
+                    .enumerate()
+                    .map(move |(x, element)| (Coord::new(x as i32, y as i32), element.clone()))
+            })
+            .collect_vec()
     }
 }
 

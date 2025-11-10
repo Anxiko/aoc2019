@@ -2,7 +2,7 @@ use crate::shared::board::{Board, Grid};
 use crate::shared::coord::Coord;
 use itertools::Itertools;
 use std::collections::HashMap;
-use std::convert::Infallible;
+use std::fmt::Debug;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct HashBoard<T> {
@@ -10,7 +10,7 @@ pub(crate) struct HashBoard<T> {
     default: T,
 }
 
-impl<T: Clone> HashBoard<T> {
+impl<T: Clone + Debug> HashBoard<T> {
     pub(crate) fn new(default: T) -> Self {
         Self {
             coord_mapping: HashMap::new(),
@@ -18,7 +18,7 @@ impl<T: Clone> HashBoard<T> {
         }
     }
 
-    pub(crate) fn as_grid(&self) -> Option<Grid<T>> {
+    pub(crate) fn as_grid(&self) -> Option<(Coord, Grid<T>)> {
         let (min_x, max_x) = self
             .coord_mapping
             .keys()
@@ -40,34 +40,38 @@ impl<T: Clone> HashBoard<T> {
 
         let mut grid = Grid::with_value(width, height, self.default.clone());
 
+	    let delta = Coord::new(min_x, min_y);
+
         self.coord_mapping.iter().for_each(|(&coord, value)| {
-            grid.write(coord, value.clone())
+            grid.write(coord - delta, value.clone())
                 .expect("Copy values to grid");
         });
 
-        Some(grid)
+        Some((delta, grid))
     }
 }
 
-impl<T> Board<T> for HashBoard<T> {
-    type Error = Infallible;
+impl<T: Clone + Default + Debug> Default for HashBoard<T> {
+    fn default() -> Self {
+        Self::new(Default::default())
+    }
+}
 
-    fn read(&self, coord: Coord) -> Result<&T, Self::Error> {
+impl<T: Clone + Debug> Board<T> for HashBoard<T> {
+    fn read(&self, coord: Coord) -> Result<&T, anyhow::Error> {
         Ok(self.coord_mapping.get(&coord).unwrap_or(&self.default))
     }
 
-    fn write(&mut self, coord: Coord, value: T) -> Result<(), Self::Error> {
+    fn write(&mut self, coord: Coord, value: T) -> Result<(), anyhow::Error> {
         self.coord_mapping.insert(coord, value);
 
         Ok(())
     }
 
-    fn elements<'a>(&'a self) -> impl Iterator<Item = (Coord, &'a T)>
-    where
-        T: 'a,
-    {
+    fn elements(&self) -> Vec<(Coord, T)> {
         self.coord_mapping
             .iter()
-            .map(|(&coord, value)| (coord, value))
+            .map(|(&coord, value)| (coord, value.clone()))
+            .collect_vec()
     }
 }
