@@ -16,6 +16,7 @@ use crate::day::solutions::day13::Day13;
 use crate::day::solutions::day14::Day14;
 use crate::day::solutions::day15::Day15;
 use crate::day::solutions::day16::Day16;
+use crate::day::solutions::day17::Day17;
 
 mod day1;
 mod day10;
@@ -33,6 +34,7 @@ mod day13;
 mod day14;
 mod day15;
 mod day16;
+mod day17;
 
 pub fn get_day(day: u32) -> Result<Box<dyn DaySolver>, anyhow::Error> {
     match day {
@@ -53,6 +55,7 @@ pub fn get_day(day: u32) -> Result<Box<dyn DaySolver>, anyhow::Error> {
 	    14 => Ok(Box::new(Day14::new())),
 	    15 => Ok(Box::new(Day15::new())),
 	    16 => Ok(Box::new(Day16::new())),
+	    17 => Ok(Box::new(Day17::new())),
         _unimplemented => anyhow::bail!("Unimplemented day: {day}"),
     }
 }
